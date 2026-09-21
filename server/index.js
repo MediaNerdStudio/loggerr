@@ -31,7 +31,7 @@ function reconcile() {
     const active = engine.status(recording.id).state !== 'stopped';
     const wanted = shouldRun(recording);
     try {
-      if (wanted && !active) engine.start(recording);
+      if (wanted && !active) engine.start(recording).catch(error => engine.emit('failure', recording.id, error.message));
       if (!wanted && active) engine.stop(recording.id);
     } catch (error) { engine.emit('failure', recording.id, error.message); }
   }

@@ -219,6 +219,8 @@ https://audio-streaming.qmusic.nl/Qmusic_nl_live_high.aac
 
 For stream sources, FFmpeg is started with reconnect support. If a remote server temporarily disconnects, FFmpeg attempts to reconnect without requiring Loggerr to create a new recording instance.
 
+Direct audio URLs and `.m3u` or `.pls` playlist URLs are supported. Loggerr resolves M3U/PLS playlists to their first audio URL before starting FFmpeg. HLS `.m3u8` manifests are passed directly to FFmpeg.
+
 #### Audio ingest
 
 Ingest sources reserve an HTTP listener port between `1024` and `65535`; the UI defaults to `9100`. Docker Compose publishes ports `9100-9199` for future capture clients.
