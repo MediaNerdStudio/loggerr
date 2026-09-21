@@ -1,0 +1,22 @@
+{
+  "name": "loggerr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"cross-env PORT=3001 nodemon server/index.js\" \"npm --prefix ui run dev\"",
+    "build": "npm --prefix ui run build",
+    "start": "node server/index.js",
+    "lint": "npm --prefix ui run lint",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
+    "nodemon": "^3.1.10"
+  }
+}
