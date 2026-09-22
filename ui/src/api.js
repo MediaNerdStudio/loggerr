@@ -6,6 +6,10 @@ async function request(url, options) {
 export const api = {
   recordings: () => request('/api/recordings'),
   presets: () => request('/api/presets'),
+  alerts: () => request('/api/alerts'),
+  storage: () => request('/api/storage'),
+  acknowledgeAlert: id => request(`/api/alerts/${id}/acknowledge`, { method: 'POST' }),
+  acknowledgeAllAlerts: () => request('/api/alerts/acknowledge-all', { method: 'POST' }),
   createRecording: body => request('/api/recordings', { method: 'POST', body: JSON.stringify(body) }),
   updateRecording: (id, body) => request(`/api/recordings/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteRecording: id => request(`/api/recordings/${id}`, { method: 'DELETE' }),

@@ -16,6 +16,8 @@ The application is designed for long-running broadcast capture and Docker deploy
 - Store every recording in its own media folder
 - Automatically remove files according to per-recording retention rules
 - View live recording state and the current output filename
+- Monitor live left/right peak and RMS audio levels
+- Detect sustained silence with a configurable threshold and duration
 - Browse archived files by recording and date
 - Play files with a WaveSurfer waveform
 - Download original recording files
@@ -38,6 +40,7 @@ Creating or editing a recording allows you to configure:
 - Filename prefix, stream name, and date format
 - Destination folder
 - Retention period
+- Live audio monitoring and silence detection threshold/duration
 
 An enabled continuous recording begins as soon as it is saved. Editing an active recording restarts its FFmpeg process so the new settings take effect.
 
@@ -49,6 +52,8 @@ The playback screen lets you:
 2. Select a date. Today is used initially; when no files exist for today, the latest recording date is selected.
 3. Select a recording file.
 4. Play, pause, seek on the waveform, or download the file.
+
+When a recording segment closes, Loggerr queues server-side peak generation. FFmpeg decodes a low-rate mono analysis stream and stores `<audio-filename>.peaks.json` beside the audio. Playback uses this compact file instead of decoding an entire long recording in the browser. The currently open segment receives peaks after it closes.
 
 ### Options
 
@@ -192,6 +197,8 @@ The production interface and API are both served from `http://localhost:3000` by
 | `MEDIA_DIR` | `./media` | Root directory for recorded audio. |
 | `TZ` | System timezone | Timezone used for scheduling and timestamped filenames. Docker Compose defaults to `Europe/Amsterdam`. |
 | `FFMPEG_PATH` | `ffmpeg` | FFmpeg executable name or absolute path. |
+| `FFPROBE_PATH` | `ffprobe` | ffprobe executable name or absolute path for waveform duration detection. |
+| `TCP_TRIGGER_PORT` | `9090` | TCP JSON Lines trigger listener port. |
 
 Example:
 
@@ -366,6 +373,12 @@ The web interface can display:
 
 Status and the current filename are sent to browsers with Server-Sent Events. Loggerr also refreshes and broadcasts engine state every 15 seconds.
 
+### Live audio and silence monitoring
+
+Audio monitoring uses a second output branch inside the same FFmpeg process and source connection. The recording branch remains unchanged—including source-copy mode—while FFmpeg decodes a parallel analysis branch with `astats`. Loggerr reads per-channel peak and RMS levels and sends them to the browser at up to ten updates per second. FFmpeg metadata output uses direct mode to prevent pipe buffering from delaying meter movement.
+
+Monitoring is enabled by default per recording. The default silence policy marks a recording silent when both channels remain at or below `-50 dBFS` for 10 seconds. Both values can be changed in the recording form. Mono sources are mirrored across the L/R display. Disabling monitoring removes the analysis output and its decoding overhead without affecting recording.
+
 ## REST API
 
 The current API has no authentication. Keep Loggerr on a trusted network or place it behind an authenticated reverse proxy.
@@ -454,6 +467,22 @@ Recorded files are served with byte-range support under:
 
 Byte-range support allows browser playback and seeking without downloading the complete file first.
 
+### TCP triggers
+
+Loggerr listens on TCP port `9090` by default. Send one newline-terminated JSON object per command:
+
+```json
+{"recordingId":"RECORDING_ID","action":"start"}
+```
+
+Valid actions are `start` and `stop`. The recording must use external trigger control. The server replies with one JSON line containing `ok: true` and the resulting state, or `ok: false` and an error. Keep this unauthenticated control port on a trusted network.
+
+### Alerts and storage
+
+`GET /api/alerts` returns persistent silence, signal-loss, and recorder-failure events. Alerts resolve automatically when audio or the recorder recovers and can be acknowledged individually with `POST /api/alerts/:id/acknowledge` or together with `POST /api/alerts/acknowledge-all`.
+
+`GET /api/storage` reports total audio bytes, waveform bytes, file count, and per-recording usage.
+
 ## Persistent data
 
 Configuration is stored in:
@@ -495,6 +524,7 @@ The image uses a multi-stage build:
 Exposed ports:
 
 - `3000`: web interface and REST API
+- `9090`: TCP JSON Lines trigger listener
 - `9100-9199`: planned audio ingest listeners
 
 If host-mounted directories are not writable by the container's `node` user, adjust ownership or permissions on the host rather than running the application as root.
@@ -633,11 +663,9 @@ Then open `http://localhost:8080`.
 ## Current limitations
 
 - The REST API and web interface do not yet include authentication or authorization.
-- TCP trigger control is not yet implemented; external triggers currently use REST.
 - Ingest is prepared at server level, but the Windows WDM/KS/MME/ASIO capture application is not yet included.
 - There is no database server; configuration uses a local JSON file.
 - Recording files are listed by filesystem modification date rather than embedded broadcast metadata.
-- Waveforms are generated in the browser rather than cached as server-side peak files.
 - High availability and multi-node recorder coordination are not implemented.
 
 ## Roadmap
@@ -646,14 +674,9 @@ Potential next steps include:
 
 - Windows multi-device ingest application
 - WDM/WASAPI, KS, MME, and ASIO support
-- Live stereo level and silence meters
 - Ingest feed discovery and authentication
-- TCP trigger listener
 - User authentication and roles
-- Server-side waveform peak generation
-- Silence and signal-loss alerts
 - Recording health history and notifications
-- Storage usage reporting
 - Export or virtual playback across adjacent chunks
 - Optional database backend for larger installations
 

@@ -23,6 +23,13 @@ export function normalizeRecording(input, existing = {}) {
     streamName: String(input.streamName || ''),
     dateFormat: ['YYYY-MM-DD', 'YYYYMMDD', 'DDMMYY'].includes(input.dateFormat) ? input.dateFormat : 'YYYY-MM-DD',
     folder: slug(input.folder || title),
-    retention: input.retention?.unit === 'forever' ? { unit: 'forever', value: 0 } : { unit: ['days', 'months', 'years'].includes(input.retention?.unit) ? input.retention.unit : 'months', value: Math.max(1, Number(input.retention?.value) || 1) }
+    retention: input.retention?.unit === 'forever' ? { unit: 'forever', value: 0 } : { unit: ['days', 'months', 'years'].includes(input.retention?.unit) ? input.retention.unit : 'months', value: Math.max(1, Number(input.retention?.value) || 1) },
+    monitoring: {
+      enabled: input.monitoring?.enabled !== false,
+      silenceThresholdDb: Math.min(-1, Math.max(-100, Number(input.monitoring?.silenceThresholdDb) || -50)),
+      silenceDurationSeconds: Math.min(3600, Math.max(1, Number(input.monitoring?.silenceDurationSeconds) || 10)),
+      signalLossSeconds: Math.min(3600, Math.max(2, Number(input.monitoring?.signalLossSeconds) || 10)),
+      alertsEnabled: input.monitoring?.alertsEnabled !== false
+    }
   };
 }

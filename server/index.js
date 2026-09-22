@@ -9,6 +9,10 @@ import { RecordingEngine } from './recording-engine.js';
 import { shouldRun } from './schedule.js';
 import { applyRetention } from './retention.js';
 import { listFiles } from './media.js';
+import { AlertManager } from './alerts.js';
+import { PeakQueue } from './peaks.js';
+import { createTcpTriggerServer } from './tcp-trigger.js';
+import { storageUsage } from './storage.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -16,6 +20,8 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 initStore();
 const engine = new RecordingEngine();
 const clients = new Set();
+const alerts = new AlertManager();
+const peakQueue = new PeakQueue();
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -25,6 +31,14 @@ function publicRecording(recording) { return { ...recording, status: engine.stat
 function broadcast() {
   const payload = `data: ${JSON.stringify(getDb().recordings.map(publicRecording))}\n\n`;
   for (const response of clients) response.write(payload);
+}
+function triggerRecording(recordingId, action) {
+  const recording = getDb().recordings.find(item => item.id === recordingId);
+  if (!recording) throw new Error('Recording not found');
+  if (recording.triggerMode !== 'trigger') throw new Error('Recording is not trigger-controlled');
+  if (!['start', 'stop'].includes(action)) throw new Error('Action must be start or stop');
+  recording.triggered = action === 'start'; save(); reconcile();
+  return { recordingId, action, state: engine.status(recordingId).state };
 }
 function reconcile() {
   for (const recording of getDb().recordings) {
@@ -37,7 +51,8 @@ function reconcile() {
   }
   broadcast();
 }
-engine.on('status', broadcast);
+engine.on('status', () => { broadcast(); alerts.evaluate(getDb().recordings, engine.statuses()); });
+engine.on('segment', audioPath => peakQueue.add(audioPath));
 engine.on('failure', (recordingId, message) => {
   const recording = getDb().recordings.find(item => item.id === recordingId);
   if (recording) { recording.lastError = message; save(); }
@@ -74,17 +89,21 @@ app.delete('/api/recordings/:id', (req, res) => {
   engine.stop(req.params.id); getDb().recordings.splice(index, 1); save(); broadcast(); res.status(204).end();
 });
 app.post('/api/recordings/:id/trigger/:action', (req, res) => {
-  const recording = getDb().recordings.find(item => item.id === req.params.id);
-  if (!recording) return res.status(404).json({ error: 'Recording not found' });
-  if (recording.triggerMode !== 'trigger') return res.status(409).json({ error: 'Recording is not trigger-controlled' });
-  if (!['start', 'stop'].includes(req.params.action)) return res.status(400).json({ error: 'Action must be start or stop' });
-  recording.triggered = req.params.action === 'start'; save(); reconcile(); res.json(publicRecording(recording));
+  try { triggerRecording(req.params.id, req.params.action); res.json(publicRecording(getDb().recordings.find(item => item.id === req.params.id))); }
+  catch (error) { res.status(error.message === 'Recording not found' ? 404 : 409).json({ error: error.message }); }
 });
 app.get('/api/recordings/:id/files', (req, res) => {
   const recording = getDb().recordings.find(item => item.id === req.params.id);
   if (!recording) return res.status(404).json({ error: 'Recording not found' });
-  res.json(listFiles(recording));
+  const files = listFiles(recording);
+  const currentFile = engine.status(recording.id).currentFile;
+  for (const file of files) if (!file.peaksUrl && file.name !== currentFile) peakQueue.add(path.resolve(MEDIA_DIR, recording.folder || '', file.name));
+  res.json(files);
 });
+app.get('/api/alerts', (_req, res) => res.json(alerts.list()));
+app.post('/api/alerts/acknowledge-all', (_req, res) => { alerts.acknowledgeAll(); res.status(204).end(); });
+app.post('/api/alerts/:id/acknowledge', (req, res) => { const alert = alerts.acknowledge(req.params.id); alert ? res.json(alert) : res.status(404).json({ error: 'Alert not found' }); });
+app.get('/api/storage', (_req, res) => res.json(storageUsage(getDb().recordings)));
 app.get('/api/presets', (_req, res) => res.json(getDb().presets));
 app.post('/api/presets', (req, res) => {
   if (!req.body.name || !req.body.extension || !Array.isArray(req.body.args)) return res.status(400).json({ error: 'Name, extension and FFmpeg argument array are required' });
@@ -108,8 +127,10 @@ if (fs.existsSync(ui)) {
 }
 
 const server = app.listen(port, () => { console.log(`Loggerr listening on http://localhost:${port}`); reconcile(); });
+const tcpServer = createTcpTriggerServer({ port: Number(process.env.TCP_TRIGGER_PORT) || 9090, handle: command => triggerRecording(command.recordingId, command.action) });
 setInterval(reconcile, 15_000).unref();
+setInterval(() => alerts.evaluate(getDb().recordings, engine.statuses()), 1000).unref();
 setInterval(() => getDb().recordings.forEach(recording => applyRetention(recording)), 60 * 60 * 1000).unref();
-function shutdown() { engine.stopAll(); server.close(() => process.exit(0)); setTimeout(() => process.exit(1), 5000).unref(); }
+function shutdown() { engine.stopAll(); tcpServer.close(); server.close(() => process.exit(0)); setTimeout(() => process.exit(1), 5000).unref(); }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

@@ -8,6 +8,7 @@ export function listFiles(recording) {
   if (!directory.startsWith(MEDIA_DIR) || !fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isFile() && audioExtensions.has(path.extname(entry.name).toLowerCase())).map(entry => {
     const stat = fs.statSync(path.join(directory, entry.name));
-    return { name: entry.name, size: stat.size, modifiedAt: stat.mtime.toISOString(), date: stat.mtime.toISOString().slice(0, 10), url: `/media/${encodeURIComponent(recording.folder || '')}/${encodeURIComponent(entry.name)}` };
+    const peaksName = `${entry.name}.peaks.json`;
+    return { name: entry.name, size: stat.size, modifiedAt: stat.mtime.toISOString(), date: stat.mtime.toISOString().slice(0, 10), url: `/media/${encodeURIComponent(recording.folder || '')}/${encodeURIComponent(entry.name)}`, peaksUrl: fs.existsSync(path.join(directory, peaksName)) ? `/media/${encodeURIComponent(recording.folder || '')}/${encodeURIComponent(peaksName)}` : '' };
   }).sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
 }

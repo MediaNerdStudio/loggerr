@@ -10,7 +10,7 @@ npm --prefix ui install
 npm run dev
 ```
 
-The UI runs at `http://localhost:3000` and proxies API/media requests to the backend on port 3001. FFmpeg and ffprobe must be available on PATH.
+The UI runs at `http://localhost:3000` and proxies API/media requests to the backend on port 3001. FFmpeg and ffprobe must be available on PATH. TCP JSON Lines triggers listen on port 9090 by default.
 
 ## Production
 
@@ -31,4 +31,4 @@ npm run build
 
 ## Recording behavior
 
-Each active source has one long-lived FFmpeg process. FFmpeg's segment muxer rotates chunks without reconnecting the source. Use a PCM preset when sample-accurate DAW joins are required; compressed formats may include codec frame or priming behavior. Scheduled times and filenames follow the container's `TZ` setting.
+Each active source has one long-lived FFmpeg process. FFmpeg's segment muxer rotates chunks without reconnecting the source. The same process has a decoded analysis branch for live meters; do not open a second source connection for monitoring. Closed segments receive adjacent `.peaks.json` waveform files through the peak queue. Use a PCM preset when sample-accurate DAW joins are required; compressed formats may include codec frame or priming behavior. Scheduled times and filenames follow the container's `TZ` setting.

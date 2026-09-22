@@ -8,12 +8,17 @@ export default function AudioPlayer({ file }) {
   const [playing, setPlaying] = useState(false);
   useEffect(() => {
     if (!file || !container.current) return;
-    const instance = WaveSurfer.create({ container: container.current, url: file.url, waveColor: '#314354', progressColor: '#f0a33b', cursorColor: '#fff', height: 72, barWidth: 2, barGap: 2, normalize: true });
-    wave.current = instance;
-    instance.on('play', () => setPlaying(true));
-    instance.on('pause', () => setPlaying(false));
-    instance.on('finish', () => setPlaying(false));
-    return () => instance.destroy();
+    let instance; let cancelled = false;
+    async function createPlayer() {
+      let peaks; let duration;
+      if (file.peaksUrl) { try { const response = await fetch(file.peaksUrl); if (response.ok) { const data = await response.json(); peaks = data.peaks; duration = data.duration; } } catch {} }
+      if (cancelled) return;
+      instance = WaveSurfer.create({ container: container.current, url: file.url, peaks, duration, waveColor: '#314354', progressColor: '#f0a33b', cursorColor: '#fff', height: 72, barWidth: 2, barGap: 2, normalize: true });
+      wave.current = instance;
+      instance.on('play', () => setPlaying(true)); instance.on('pause', () => setPlaying(false)); instance.on('finish', () => setPlaying(false));
+    }
+    createPlayer();
+    return () => { cancelled = true; instance?.destroy(); };
   }, [file]);
   if (!file) return <div className="empty">Select a recording file to play it.</div>;
   return <div className="player"><div className="player-head"><div><strong>{file.name}</strong><small>{new Date(file.modifiedAt).toLocaleString()} · {(file.size / 1048576).toFixed(1)} MB</small></div><div className="actions"><button className="icon primary" onClick={() => wave.current?.playPause()}>{playing ? <Pause/> : <Play/>}</button><a className="icon" href={file.url} download><Download/></a></div></div><div ref={container}/></div>;

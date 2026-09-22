@@ -21,7 +21,8 @@ export function applyRetention(recording, now = new Date()) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const file = path.join(directory, entry.name);
-    if (fs.statSync(file).mtime < before) { fs.unlinkSync(file); removed += 1; }
+    if (entry.name.endsWith('.peaks.json')) continue;
+    if (fs.statSync(file).mtime < before) { fs.unlinkSync(file); const peaks = `${file}.peaks.json`; if (fs.existsSync(peaks)) fs.unlinkSync(peaks); removed += 1; }
   }
   return removed;
 }

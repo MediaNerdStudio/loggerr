@@ -5,10 +5,13 @@ import { EventEmitter } from 'node:events';
 import { MEDIA_DIR, getDb } from './store.js';
 import { outputPattern } from './naming.js';
 import { resolveStreamUrl } from './stream-url.js';
+import { audioStatus, consumeMeterOutput, createAudioMonitor } from './audio-monitor.js';
+
+const audioExtensions = new Set(['.aac', '.mp3', '.m4a', '.ogg', '.wav', '.flac', '.opus']);
 
 export class RecordingEngine extends EventEmitter {
   constructor() { super(); this.processes = new Map(); }
-  statuses() { return Object.fromEntries([...this.processes].map(([key, item]) => { item.currentFile = this.latestFile(item.directory); return [key, { state: item.state, pid: item.child?.pid, startedAt: item.startedAt, currentFile: item.currentFile, error: item.error }]; })); }
+  statuses() { return Object.fromEntries([...this.processes].map(([key, item]) => { const latest = this.latestFile(item.directory); if (item.currentFile && latest && latest !== item.currentFile) this.emit('segment', path.join(item.directory, item.currentFile)); item.currentFile = latest; return [key, { state: item.state, pid: item.child?.pid, startedAt: item.startedAt, currentFile: item.currentFile, error: item.error, audio: item.monitor ? audioStatus(item.monitor) : null }]; })); }
   status(id) { return this.statuses()[id] || { state: 'stopped', currentFile: null }; }
 
   async start(recording) {
@@ -20,7 +23,7 @@ export class RecordingEngine extends EventEmitter {
     const absolutePattern = path.resolve(MEDIA_DIR, relativePattern);
     if (!absolutePattern.startsWith(MEDIA_DIR)) throw new Error('Recording folder must be inside the media directory');
     fs.mkdirSync(path.dirname(absolutePattern), { recursive: true });
-    const state = { state: 'starting', startedAt: new Date().toISOString(), currentFile: null, directory: path.dirname(absolutePattern), error: null, stderr: '', child: null, stopped: false };
+    const state = { state: 'starting', startedAt: new Date().toISOString(), currentFile: null, directory: path.dirname(absolutePattern), error: null, stderr: '', child: null, stopped: false, monitor: recording.monitoring?.enabled === false ? null : createAudioMonitor(recording.monitoring) };
     this.processes.set(recording.id, state);
     this.emit('status');
     try {
@@ -31,14 +34,17 @@ export class RecordingEngine extends EventEmitter {
         ? ['-listen', '1', '-i', `http://0.0.0.0:${recording.ingestPort}`]
         : ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-i', sourceUrl];
       const codecArgs = recording.mode === 'copy' ? ['-c:a', 'copy'] : preset.args;
-      const args = ['-hide_banner', '-loglevel', 'warning', ...inputArgs, '-map', '0:a:0', ...codecArgs, '-f', 'segment', '-segment_time', String(segmentSeconds), '-segment_atclocktime', '1', '-reset_timestamps', '1', '-strftime', '1', absolutePattern];
-      const child = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { windowsHide: true });
+      const segmentArgs = ['-map', '0:a:0', ...codecArgs, '-f', 'segment', '-segment_time', String(segmentSeconds), '-segment_atclocktime', '1', '-reset_timestamps', '1', '-strftime', '1', absolutePattern];
+      const meterArgs = state.monitor ? ['-map', '0:a:0', '-af', 'astats=metadata=1:reset=1:measure_overall=none:measure_perchannel=Peak_level+RMS_level,ametadata=mode=print:file=-:direct=1', '-f', 'null', '-'] : [];
+      const child = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ['-hide_banner', '-loglevel', 'warning', ...inputArgs, ...segmentArgs, ...meterArgs], { windowsHide: true });
       state.child = child;
       state.state = 'recording';
+      if (state.monitor) child.stdout.on('data', chunk => { if (consumeMeterOutput(state.monitor, chunk.toString())) this.emit('status'); });
       child.stderr.on('data', chunk => { state.stderr = `${state.stderr}${chunk}`.slice(-4000); state.currentFile = this.latestFile(state.directory); this.emit('status'); });
       child.on('error', error => { state.state = 'error'; state.error = error.message; this.emit('status'); });
       child.on('exit', (code, signal) => {
         state.child = null;
+        if (state.currentFile) { this.emit('segment', path.join(state.directory, state.currentFile)); state.currentFile = null; }
         if (state.stopped || signal === 'SIGTERM' || code === 0) this.processes.delete(recording.id);
         else { state.state = 'error'; state.error = state.stderr || `FFmpeg exited with code ${code}`; this.emit('failure', recording.id, state.error); }
         this.emit('status');
@@ -64,7 +70,7 @@ export class RecordingEngine extends EventEmitter {
 
   latestFile(directory) {
     try {
-      return fs.readdirSync(directory).map(name => ({ name, time: fs.statSync(path.join(directory, name)).mtimeMs })).sort((a, b) => b.time - a.time)[0]?.name || null;
+      return fs.readdirSync(directory).filter(name => audioExtensions.has(path.extname(name).toLowerCase())).map(name => ({ name, time: fs.statSync(path.join(directory, name)).mtimeMs })).sort((a, b) => b.time - a.time)[0]?.name || null;
     } catch { return null; }
   }
 
