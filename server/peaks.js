@@ -24,7 +24,13 @@ export async function generatePeaks(audioPath, outputPath, points = 1200) {
 }
 
 export class PeakQueue {
-  constructor() { this.queue = []; this.active = false; }
-  add(audioPath) { const outputPath = `${audioPath}.peaks.json`; if (fs.existsSync(outputPath) || this.queue.some(item => item.audioPath === audioPath)) return; this.queue.push({ audioPath, outputPath }); this.next(); }
-  async next() { if (this.active || !this.queue.length) return; this.active = true; const job = this.queue.shift(); try { if (fs.existsSync(job.audioPath)) await generatePeaks(job.audioPath, job.outputPath); } catch (error) { console.warn('Could not generate waveform peaks', job.audioPath, error.message); } finally { this.active = false; this.next(); } }
+  constructor() { this.queue = []; this.active = false; this.failed = new Map(); }
+  add(audioPath) {
+    const outputPath = `${audioPath}.peaks.json`;
+    if (!fs.existsSync(audioPath) || fs.existsSync(outputPath) || this.queue.some(item => item.audioPath === audioPath)) return;
+    const stat = fs.statSync(audioPath); const signature = `${stat.size}:${stat.mtimeMs}`;
+    if (stat.size < 4096 || this.failed.get(audioPath) === signature) return;
+    this.queue.push({ audioPath, outputPath, signature }); this.next();
+  }
+  async next() { if (this.active || !this.queue.length) return; this.active = true; const job = this.queue.shift(); try { if (fs.existsSync(job.audioPath)) { await generatePeaks(job.audioPath, job.outputPath); this.failed.delete(job.audioPath); } } catch (error) { this.failed.set(job.audioPath, job.signature); console.warn('Could not generate waveform peaks', job.audioPath, error.message); } finally { this.active = false; this.next(); } }
 }

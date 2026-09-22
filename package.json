@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "concurrently \"cross-env PORT=3001 nodemon server/index.js\" \"npm --prefix ui run dev\"",
     "build": "npm --prefix ui run build",
+    "build:windows": "cd windows/Loggerr.Ingest && dotnet build Loggerr.Ingest.csproj -c Release -p:Platform=x64",
+    "publish:windows": "cd windows/Loggerr.Ingest && dotnet publish Loggerr.Ingest.csproj -c Release -p:Platform=x64 --self-contained false",
     "start": "node server/index.js",
     "lint": "npm --prefix ui run lint",
     "test": "node --test"

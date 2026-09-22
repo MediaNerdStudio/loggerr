@@ -21,7 +21,7 @@ The application is designed for long-running broadcast capture and Docker deploy
 - Browse archived files by recording and date
 - Play files with a WaveSurfer waveform
 - Download original recording files
-- Prepare ingest listeners for a future Windows audio capture client
+- Capture multiple Windows inputs through the authenticated Loggerr Ingest companion
 - Persist configuration and media independently through Docker volumes
 
 ## Screens and workflow
@@ -54,6 +54,8 @@ The playback screen lets you:
 4. Play, pause, seek on the waveform, or download the file.
 
 When a recording segment closes, Loggerr queues server-side peak generation. FFmpeg decodes a low-rate mono analysis stream and stores `<audio-filename>.peaks.json` beside the audio. Playback uses this compact file instead of decoding an entire long recording in the browser. The currently open segment receives peaks after it closes.
+
+Enable **Continue across chunks** to treat all files on the selected date as one chronological virtual playlist. When one file ends, the next adjacent chunk loads and starts automatically. **Export day** streams all completed chunks for that date through FFmpeg's concat demuxer and downloads one combined file without creating another permanent media copy.
 
 ### Options
 
@@ -230,20 +232,11 @@ Direct audio URLs and `.m3u` or `.pls` playlist URLs are supported. Loggerr reso
 
 #### Audio ingest
 
-Ingest sources reserve an HTTP listener port between `1024` and `65535`; the UI defaults to `9100`. Docker Compose publishes ports `9100-9199` for future capture clients.
+Ingest sources accept authenticated float PCM on the main Loggerr HTTP(S) port. Each feed defines a sample rate (44.1, 48, 88.2, or 96 kHz) and mono/stereo channel count. Ingest recordings always use a transcode preset.
 
-Ingest is currently an experimental foundation for the planned Windows capture application. It is intended to receive encoded or raw audio pushed to FFmpeg's HTTP listener. Ingest recordings always use a transcode preset.
+Create a named ingest token under **Options** and copy it when shown; only its SHA-256 digest is stored by the server. The Windows companion stores the token in Windows Credential Manager, discovers available feeds with `GET /api/ingest/feeds`, and streams each selected device to `PUT /api/ingest/feeds/:id/audio`. Tokens can be revoked at any time. Use HTTPS outside a trusted LAN.
 
-The future Windows client is expected to add:
-
-- WDM/WASAPI capture
-- Kernel Streaming capture
-- MME capture
-- ASIO capture
-- Multiple simultaneous inputs
-- Stereo level meters
-- Connection and received-audio feedback
-- Main-server feed discovery and authentication
+The WPF companion under `windows/Loggerr.Ingest` supports multiple simultaneous feed assignments, live stereo meters, reconnect feedback, and PortAudio device discovery. A standard build provides WASAPI, WDM-KS, and MME. ASIO is an optional local build feature because distributing an ASIO-enabled PortAudio binary requires accepting and complying with the Steinberg ASIO SDK license. See its local README for build instructions.
 
 ### Trigger modes
 
@@ -467,6 +460,25 @@ Recorded files are served with byte-range support under:
 
 Byte-range support allows browser playback and seeking without downloading the complete file first.
 
+### Ingest discovery and audio upload
+
+Administrators manage named credentials with:
+
+```http
+GET    /api/ingest/tokens
+POST   /api/ingest/tokens
+DELETE /api/ingest/tokens/:id
+```
+
+The plaintext token is returned only by `POST`. Ingest clients send it as `Authorization: Bearer <token>` to:
+
+```http
+GET /api/ingest/feeds
+PUT /api/ingest/feeds/:id/audio
+```
+
+The audio request is a long-lived chunked body. `X-Loggerr-Codec` selects `f32le`, `s16le`, `mp3`, or ADTS `aac`; sample rate, channels, and bitrate are carried in companion headers. The server validates these against the feed and decodes compressed transports to float PCM before the normal recording/transcode pipeline. Only one client can stream to a feed at a time. Restricted tokens may include a list of allowed feed IDs through the API; tokens created by the current UI can access all ingest feeds.
+
 ### TCP triggers
 
 Loggerr listens on TCP port `9090` by default. Send one newline-terminated JSON object per command:
@@ -482,6 +494,10 @@ Valid actions are `start` and `stop`. The recording must use external trigger co
 `GET /api/alerts` returns persistent silence, signal-loss, and recorder-failure events. Alerts resolve automatically when audio or the recorder recovers and can be acknowledged individually with `POST /api/alerts/:id/acknowledge` or together with `POST /api/alerts/acknowledge-all`.
 
 `GET /api/storage` reports total audio bytes, waveform bytes, file count, and per-recording usage.
+
+`GET /api/health/history` returns persisted recording state transitions; filter with `?recordingId=<id>`. `GET /api/health/summary` returns the current health state, incident count, latest incident, and last transition for each recording. The Operations page can request browser notification permission and emits one desktop notification for each new unacknowledged active alert.
+
+`GET /api/recordings/:id/export?date=YYYY-MM-DD` streams completed adjacent chunks from the selected date as one download. All chunks must use the same supported format.
 
 ## Persistent data
 
@@ -525,7 +541,6 @@ Exposed ports:
 
 - `3000`: web interface and REST API
 - `9090`: TCP JSON Lines trigger listener
-- `9100-9199`: planned audio ingest listeners
 
 If host-mounted directories are not writable by the container's `node` user, adjust ownership or permissions on the host rather than running the application as root.
 
@@ -579,6 +594,8 @@ loggerr/
 │       └── styles.css         # Application styling
 ├── test/
 │   └── schedule.test.js
+├── windows/
+│   └── Loggerr.Ingest/       # WPF multi-device Windows capture client
 ├── data/                      # Runtime configuration, not committed
 ├── media/                     # Recorded audio, not committed
 ├── Dockerfile
@@ -663,7 +680,6 @@ Then open `http://localhost:8080`.
 ## Current limitations
 
 - The REST API and web interface do not yet include authentication or authorization.
-- Ingest is prepared at server level, but the Windows WDM/KS/MME/ASIO capture application is not yet included.
 - There is no database server; configuration uses a local JSON file.
 - Recording files are listed by filesystem modification date rather than embedded broadcast metadata.
 - High availability and multi-node recorder coordination are not implemented.
@@ -672,12 +688,7 @@ Then open `http://localhost:8080`.
 
 Potential next steps include:
 
-- Windows multi-device ingest application
-- WDM/WASAPI, KS, MME, and ASIO support
-- Ingest feed discovery and authentication
 - User authentication and roles
-- Recording health history and notifications
-- Export or virtual playback across adjacent chunks
 - Optional database backend for larger installations
 
 ## License

@@ -1,5 +1,11 @@
 import { slug } from './store.js';
 
+export function normalizeIngestTransport(headers, format) {
+  const transport = { codec: String(headers['x-loggerr-codec'] || 'f32le').toLowerCase(), sampleRate: Number(headers['x-loggerr-sample-rate']) || format.sampleRate, channels: Number(headers['x-loggerr-channels']) || format.channels, bitrate: Number(headers['x-loggerr-bitrate']) || null };
+  if (!['f32le', 's16le', 'mp3', 'aac'].includes(transport.codec) || transport.sampleRate !== format.sampleRate || transport.channels !== format.channels) throw new Error('Unsupported ingest transport format');
+  return transport;
+}
+
 export function normalizeRecording(input, existing = {}) {
   const title = String(input.title || '').trim();
   if (!title) throw new Error('Title is required');
@@ -11,7 +17,8 @@ export function normalizeRecording(input, existing = {}) {
     enabled: input.enabled !== false,
     sourceType,
     sourceUrl: sourceType === 'stream' ? input.sourceUrl.trim() : '',
-    ingestPort: sourceType === 'ingest' ? Math.min(65535, Math.max(1024, Number(input.ingestPort) || 9100)) : null,
+    ingestPort: null,
+    ingestFormat: sourceType === 'ingest' ? { sampleRate: [44100, 48000, 88200, 96000].includes(Number(input.ingestFormat?.sampleRate)) ? Number(input.ingestFormat.sampleRate) : 48000, channels: Number(input.ingestFormat?.channels) === 1 ? 1 : 2, sampleFormat: 'f32le' } : null,
     triggerMode: input.triggerMode === 'trigger' ? 'trigger' : 'continuous',
     triggered: existing.triggered || false,
     schedule: input.schedule || { type: 'continuous' },

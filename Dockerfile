@@ -18,6 +18,6 @@ COPY --from=builder /app/ui/dist ./ui/dist
 RUN mkdir -p /app/data /app/media && chown -R node:node /app
 USER node
 VOLUME ["/app/data", "/app/media"]
-EXPOSE 3000 9090 9100-9199
+EXPOSE 3000 9090
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "server/index.js"]

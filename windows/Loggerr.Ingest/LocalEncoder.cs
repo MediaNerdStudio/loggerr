@@ -1,0 +1,19 @@
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Channels;
+
+namespace Loggerr.Ingest;
+
+internal sealed class LocalEncoder : IAsyncDisposable {
+  private readonly EncodingProfile profile; private readonly AudioFormat format; private readonly CancellationTokenSource cancellation = new(); private readonly Channel<byte[]> input = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(128) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true }); private readonly Channel<byte[]> output = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true }); private Process? process; private Task? pumpInput; private Task? pumpOutput;
+  public LocalEncoder(EncodingProfile profile, AudioFormat format) { this.profile = profile; this.format = format; }
+  public ChannelWriter<byte[]> Input => input.Writer;
+  public ChannelReader<byte[]> Output => output.Reader;
+  public string Codec => profile.Codec;
+  public int Bitrate => profile.Bitrate;
+  public void Start() { if (profile.Codec == "s16le") { pumpInput = ConvertPcmAsync(cancellation.Token); return; } var executable = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe"); if (!File.Exists(executable)) executable = "ffmpeg"; var encoder = profile.Codec == "aac" ? "aac_mf" : "mp3_mf"; var muxer = profile.Codec == "aac" ? "adts" : "mp3"; var arguments = $"-hide_banner -loglevel error -f f32le -ar {format.SampleRate} -ac {format.Channels} -i pipe:0 -c:a {encoder} -b:a {profile.Bitrate} -f {muxer} pipe:1"; process = Process.Start(new ProcessStartInfo(executable, arguments) { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true }) ?? throw new InvalidOperationException("Could not start the Media Foundation encoder bridge"); pumpInput = PumpInputAsync(process.StandardInput.BaseStream, cancellation.Token); pumpOutput = PumpOutputAsync(process.StandardOutput.BaseStream, cancellation.Token); _ = Task.Run(async () => { var error = await process.StandardError.ReadToEndAsync(cancellation.Token); if (!string.IsNullOrWhiteSpace(error) && !cancellation.IsCancellationRequested) output.Writer.TryComplete(new InvalidOperationException(error.Trim())); }, cancellation.Token); }
+  private async Task ConvertPcmAsync(CancellationToken cancel) { await foreach (var bytes in input.Reader.ReadAllAsync(cancel)) { var floats = new float[bytes.Length / sizeof(float)]; Buffer.BlockCopy(bytes, 0, floats, 0, bytes.Length); var pcm = new byte[floats.Length * sizeof(short)]; for (var index = 0; index < floats.Length; index++) { var sample = (short)Math.Clamp(floats[index] * short.MaxValue, short.MinValue, short.MaxValue); pcm[index * 2] = (byte)sample; pcm[index * 2 + 1] = (byte)(sample >> 8); } await output.Writer.WriteAsync(pcm, cancel); } }
+  private async Task PumpInputAsync(Stream destination, CancellationToken cancel) { try { await foreach (var bytes in input.Reader.ReadAllAsync(cancel)) { await destination.WriteAsync(bytes, cancel); await destination.FlushAsync(cancel); } } catch (OperationCanceledException) {} }
+  private async Task PumpOutputAsync(Stream source, CancellationToken cancel) { var buffer = new byte[16384]; try { while (!cancel.IsCancellationRequested) { var count = await source.ReadAsync(buffer, cancel); if (count == 0) break; await output.Writer.WriteAsync(buffer[..count].ToArray(), cancel); } } catch (OperationCanceledException) {} }
+  public async ValueTask DisposeAsync() { cancellation.Cancel(); input.Writer.TryComplete(); if (process is { HasExited: false }) process.Kill(true); if (pumpInput is not null) try { await pumpInput; } catch (OperationCanceledException) {} if (pumpOutput is not null) try { await pumpOutput; } catch (OperationCanceledException) {} output.Writer.TryComplete(); process?.Dispose(); cancellation.Dispose(); }
+}

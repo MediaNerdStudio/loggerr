@@ -15,7 +15,7 @@ export const defaultPresets = [
   { id: 'ogg-192', name: 'Ogg Vorbis 192 kbps / 48 kHz', extension: 'ogg', args: ['-c:a', 'libvorbis', '-b:a', '192k', '-ar', '48000'] }
 ];
 
-const initial = { recordings: [], presets: defaultPresets, alerts: [] };
+const initial = { recordings: [], presets: defaultPresets, alerts: [], healthEvents: [], ingestTokens: [] };
 let db;
 
 export function initStore() {

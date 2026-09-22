@@ -5,3 +5,8 @@ data/
 media/
 .env
 *.log
+Development/
+windows/**/bin/
+windows/**/obj/
+windows/**/native/build*/
+windows/**/native/asiosdk*/

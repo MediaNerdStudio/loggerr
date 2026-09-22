@@ -19,7 +19,7 @@ npm run build
 npm start
 ```
 
-Or run `docker compose up -d --build`. Persistent configuration is in `data/`; recordings are in `media/`. Ingest listeners use ports 9100-9199 by default.
+Or run `docker compose up -d --build`. Persistent configuration is in `data/`; recordings are in `media/`. Windows ingest clients discover and stream feeds through authenticated endpoints on the main HTTP(S) port.
 
 ## Verification
 
@@ -27,8 +27,9 @@ Or run `docker compose up -d --build`. Persistent configuration is in `data/`; r
 npm test
 npm run lint
 npm run build
+npm run build:windows
 ```
 
 ## Recording behavior
 
-Each active source has one long-lived FFmpeg process. FFmpeg's segment muxer rotates chunks without reconnecting the source. The same process has a decoded analysis branch for live meters; do not open a second source connection for monitoring. Closed segments receive adjacent `.peaks.json` waveform files through the peak queue. Use a PCM preset when sample-accurate DAW joins are required; compressed formats may include codec frame or priming behavior. Scheduled times and filenames follow the container's `TZ` setting.
+Each active source has one long-lived FFmpeg process. FFmpeg's segment muxer rotates chunks without reconnecting the source. The same process has a decoded analysis branch for live meters; do not open a second source connection for monitoring. Closed segments receive adjacent `.peaks.json` waveform files through the peak queue. Date exports stream completed same-format chunks through FFmpeg's concat demuxer and must not create permanent combined files. Use a PCM preset when sample-accurate DAW joins are required; compressed formats may include codec frame or priming behavior. Scheduled times and filenames follow the container's `TZ` setting.

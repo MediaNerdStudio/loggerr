@@ -1,0 +1,20 @@
+<Application x:Class="Loggerr.Ingest.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml">
+  <Application.Resources>
+    <SolidColorBrush x:Key="BackgroundBrush" Color="#091017"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#101922"/>
+    <SolidColorBrush x:Key="InputBrush" Color="#0B131A"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#2A3B49"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#DCE5ED"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#81909D"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#F0A33B"/>
+    <Style TargetType="Window"><Setter Property="Background" Value="{StaticResource BackgroundBrush}"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="FontFamily" Value="Segoe UI"/></Style>
+    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource TextBrush}"/></Style>
+    <Style TargetType="Button"><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="4"/><Setter Property="Background" Value="#182632"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/></Style>
+    <Style TargetType="TextBox"><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="4"/><Setter Property="Background" Value="{StaticResource InputBrush}"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/></Style>
+    <Style TargetType="PasswordBox"><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="4"/><Setter Property="Background" Value="{StaticResource InputBrush}"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/></Style>
+    <Style TargetType="ComboBox"><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="4"/><Setter Property="Background" Value="{StaticResource InputBrush}"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/></Style>
+    <Style TargetType="ComboBoxItem"><Setter Property="Background" Value="{StaticResource InputBrush}"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="Padding" Value="8,5"/></Style>
+    <Style TargetType="ScrollViewer"><Setter Property="Background" Value="Transparent"/></Style>
+    <Style TargetType="ToolTip"><Setter Property="Background" Value="#182632"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/></Style>
+  </Application.Resources>
+</Application>

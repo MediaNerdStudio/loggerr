@@ -1,0 +1,17 @@
+{
+  "name": "Loggerr",
+  "short_name": "Loggerr",
+  "description": "Self-hosted radio and audio logger",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#091017",
+  "theme_color": "#f0a33b",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

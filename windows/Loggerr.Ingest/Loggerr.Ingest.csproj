@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Loggerr.Ingest</AssemblyName>
+    <RootNamespace>Loggerr.Ingest</RootNamespace>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('native/build-asio/_deps/portaudio-build/Release/portaudio_x64.dll')">
+    <Content Include="native/build-asio/_deps/portaudio-build/Release/portaudio_x64.dll" Link="portaudio_x64.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('native/build-asio/_deps/portaudio-build/Release/portaudio_x64.dll') And Exists('native/build/_deps/portaudio-build/Release/portaudio_x64.dll')">
+    <Content Include="native/build/_deps/portaudio-build/Release/portaudio_x64.dll" Link="portaudio_x64.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

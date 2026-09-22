@@ -5,7 +5,6 @@ services:
     ports:
       - "3000:3000"
       - "9090:9090"
-      - "9100-9199:9100-9199"
     environment:
       PORT: 3000
       DATA_DIR: /app/data
